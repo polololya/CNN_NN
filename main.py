@@ -4,7 +4,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
 
 
-class ImageClassificationTF():
+class ImageClassificationTF:
     def __init__(self,path):
         self.path = path
 
