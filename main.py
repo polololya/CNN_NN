@@ -37,7 +37,7 @@ class ImageClassificationTF:
             height_shift_range=0.1,
             validation_split=0.2,
             rotation_range=30,
-            brightness_range = (0.3,1.5),
+            brightness_range = (0.5,1.1),
             fill_mode='nearest')
 
         self.train_generator = train_datagen.flow_from_directory(
@@ -77,10 +77,10 @@ class ImageClassificationTF:
 
 
 
-neuralnet.visualization()
-neuralnet.test_train_val()
-neuralnet.augumented_visualization()
-
+data_visualization = ImageClassificationTF('C:/Users/slipn/Downloads/hotdog__not_hotdog/')
+data_visualization.test_train_val()
+data_visualization.visualization()
+data_visualization.augumented_visualization()
 
 
 
