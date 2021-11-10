@@ -11,7 +11,7 @@ class ImageClassificationTF:
 
     def visualization(self):
         train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-            self.path+'train',
+            self.path+'/train',
             validation_split=0.2,
             subset="training",
             seed=1337,
@@ -41,14 +41,14 @@ class ImageClassificationTF:
             fill_mode='nearest')
 
         self.train_generator = train_datagen.flow_from_directory(
-            self.path+'train/',
+            self.path+'/train',
             target_size=(315, 315),
             batch_size=32,
             class_mode='binary',
         subset='training')
 
         validation_generator = train_datagen.flow_from_directory(
-            self.path + 'train/',
+            self.path + '/train',
             target_size=(315, 315),
             batch_size=32,
             class_mode='binary',
@@ -77,7 +77,7 @@ class ImageClassificationTF:
 
 
 
-data_visualization = ImageClassificationTF('C:/Users/slipn/Downloads/hotdog__not_hotdog/')
+data_visualization = ImageClassificationTF('hotdog__not_hotdog')
 data_visualization.test_train_val()
 data_visualization.visualization()
 data_visualization.augumented_visualization()
