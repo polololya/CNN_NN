@@ -6,10 +6,14 @@ from tensorflow.keras import layers
 from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.applications import VGG19
 from tensorflow.keras.layers import Dense
+from tensorflow.keras import Sequential
+from keras.utils.vis_utils import plot_model
+from keras_lr_finder import lr_finder
 
 class ImageClassificationTF:
-    def __init__(self, path):
+    def __init__(self, path,image_size):
         self.path = path
+        self.image_size = image_size
 
 
     def visualization(self):
@@ -18,7 +22,7 @@ class ImageClassificationTF:
             validation_split=0.2,
             subset="training",
             seed=1337,
-            image_size=(315, 315),
+            image_size=self.image_size,
             batch_size=32,
         )
         plt.figure(figsize=(10, 10))
@@ -132,7 +136,6 @@ class ImageClassificationTF:
 
     def training_process(self, model, epochs, train_ds, val_ds, test_set):
         model.summary()  # model layers+info
-        # keras.utils.plot_model(model, show_shapes=True)#visualization of the model
 
         # Compile model
         model.compile(
@@ -171,10 +174,10 @@ class ImageClassificationTF:
 
     def pretrained_model(self,model,unfreeze):
         if model == 'VGG16':
-            model = VGG16(include_top=False, input_shape=image_size + (3,), weights='imagenet')
+            model = VGG16(include_top=False, input_shape=self.image_size + (3,), weights='imagenet')
 
         elif model == 'VGG19':
-            model = VGG19(include_top=False, input_shape=image_size + (3,), weights='imagenet')
+            model = VGG19(include_top=False, input_shape=self.image_size + (3,), weights='imagenet')
 
         customized_model = Sequential()
 
@@ -182,28 +185,48 @@ class ImageClassificationTF:
         customized_model.add(model.layers[0])
 
         # Add remaining layers of default model
-        for layer in model.layers[1:-1]:
+        for layer in model.layers[:-1]:
             customized_model.add(layer)
 
+
+        if unfreeze == 1:
+            for layer in customized_model.layers[:]:
+                layer.trainable = True
+
+        elif unfreeze ==0:
+            for layer in customized_model.layers[:]:
+                layer.trainable = False
+
+
+        customized_model.add(layers.GlobalAveragePooling2D())
         # Add global average polling to be in line with dimensionality
         # customized_model.add(layers.GlobalAveragePooling2D())
 
         # Set pretrained layers of the model to be not trainable
-        if unfreeze == 'yes':
-            customized_model.add(layers.GlobalAveragePooling2D())
-            for layer in customized_model.layers[:]:
-                layer.trainable = True
+        #if unfreeze == 'yes':
+         #   customized_model.add(layers.GlobalAveragePooling2D())
+          #  for layer in customized_model.layers[:]:
+           #     layer.trainable = True
 
 
 
-        else:
-            # Add global average polling to be in line with dimensionality
-            customized_model.add(layers.GlobalAveragePooling2D())
-            for layer in customized_model.layers[4:]:
-                layer.trainable = False
+        #else:
+         #   # Add global average polling to be in line with dimensionality
+          #  for layer in customized_model.layers[:]:
+           #     layer.trainable = False
 
         # Add last layer with sigmoid activation function since we have 2 classes
         customized_model.add(Dense(units=1, activation='sigmoid'))
 
-        return self.customized_model
+        return customized_model
 
+hot_dog = ImageClassificationTF('hotdog__not_hotdog', image_size=(315, 315))
+hot_dog.test_train_val()
+#hot_dog.visualization()
+#hot_dog.augumented_visualization()
+self_defined = hot_dog.customized_model((315, 315), 2)
+#vgg16 = hot_dog.pretrained_model(model='VGG16', unfreeze='no')
+vgg19 = hot_dog.pretrained_model(model='VGG19', unfreeze= 1)
+
+#hot_dog.training_process(self_defined, 50, *hot_dog.test_train_val())
+hot_dog.training_process(vgg19, 50, *hot_dog.test_train_val())
