@@ -220,13 +220,3 @@ class ImageClassificationTF:
 
         return customized_model
 
-hot_dog = ImageClassificationTF('hotdog__not_hotdog', image_size=(315, 315))
-hot_dog.test_train_val()
-#hot_dog.visualization()
-#hot_dog.augumented_visualization()
-self_defined = hot_dog.customized_model((315, 315), 2)
-#vgg16 = hot_dog.pretrained_model(model='VGG16', unfreeze='no')
-vgg19 = hot_dog.pretrained_model(model='VGG19', unfreeze= 1)
-
-#hot_dog.training_process(self_defined, 50, *hot_dog.test_train_val())
-hot_dog.training_process(vgg19, 50, *hot_dog.test_train_val())
