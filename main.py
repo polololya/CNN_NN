@@ -6,18 +6,18 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from keras.models import Model
 
-class ImageClassificationTF:
-    def __init__(self,path):
-        self.path = path
 
+class ImageClassificationTF:
+    def __init__(self, path):
+        self.path = path
 
     def visualization(self):
         train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-            self.path+'/train',
+            self.path + '/train',
             validation_split=0.2,
             subset="training",
             seed=1337,
-            image_size=(315,315),
+            image_size=(315, 315),
             batch_size=32,
         )
         plt.figure(figsize=(10, 10))
@@ -35,19 +35,19 @@ class ImageClassificationTF:
             shear_range=0.2,
             zoom_range=0.2,
             horizontal_flip=True,
-            vertical_flip = True,
+            vertical_flip=True,
             height_shift_range=0.1,
             validation_split=0.2,
             rotation_range=30,
-            brightness_range = (0.5,1.1),
+            brightness_range=(0.5, 1.1),
             fill_mode='nearest')
 
         self.train_generator = train_datagen.flow_from_directory(
-            self.path+'/train',
+            self.path + '/train',
             target_size=(315, 315),
             batch_size=32,
             class_mode='binary',
-        subset='training')
+            subset='training')
 
         self.validation_generator = train_datagen.flow_from_directory(
             self.path + '/train',
@@ -57,14 +57,13 @@ class ImageClassificationTF:
             subset='validation')
 
         test_datagen = ImageDataGenerator(rescale=1. / 255)
-        self.test_pictures = test_datagen.flow_from_directory(self.path+'/test/', target_size=(315, 315),
-                                                         batch_size=32,
-                                                         class_mode='binary')
+        self.test_pictures = test_datagen.flow_from_directory(self.path + '/test/', target_size=(315, 315),
+                                                              batch_size=32,
+                                                              class_mode='binary')
         return self.train_generator, self.validation_generator, self.test_pictures
 
-
     def augumented_visualization(self):
-        imgs,labels = next(self.train_generator)
+        imgs, labels = next(self.train_generator)
         fig, axes = plt.subplots(1, 10, figsize=(20, 20))
         axes = axes.flatten()
         for img, ax in zip(imgs, axes):
@@ -75,8 +74,8 @@ class ImageClassificationTF:
         plt.show()
 
     def customized_model(self):
-        def make_model(input_shape, num_classes,data_augmentation):
-            inputs = keras.Input(shape= input_shape)
+        def make_model(input_shape, num_classes, data_augmentation):
+            inputs = keras.Input(shape=input_shape)
             # Image augmentation block
             x = data_augmentation(inputs)
 
@@ -136,13 +135,11 @@ class ImageClassificationTF:
 
             ]
         )
-        customized_model = make_model(input_shape=image_size + (3,), num_classes=2,data_augmentation=data_augmentation)
-
+        customized_model = make_model(input_shape=image_size + (3,), num_classes=2, data_augmentation=data_augmentation)
 
         return customized_model
 
-
-    def training_process(self, model,epochs,train_ds,val_ds, test_set):
+    def training_process(self, model, epochs, train_ds, val_ds, test_set):
         model.summary()  # model layers+info
         # keras.utils.plot_model(model, show_shapes=True)#visualization of the model
 
@@ -181,14 +178,9 @@ class ImageClassificationTF:
         print(f'Test loss: {score[0]} / Test accuracy: {score[1]}')
 
 
-
-
-
 hot_dog = ImageClassificationTF('hotdog__not_hotdog')
 hot_dog.test_train_val()
-#data_visualization.visualization()
-#data_visualization.augumented_visualization()
+# data_visualization.visualization()
+# data_visualization.augumented_visualization()
 hot_dog.customized_model()
-hot_dog.training_process(hot_dog.customized_model(),50,*hot_dog.test_train_val())
-
-
+hot_dog.training_process(hot_dog.customized_model(), 50, *hot_dog.test_train_val())
