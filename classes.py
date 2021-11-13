@@ -9,11 +9,11 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras import Sequential
 from keras_lr_finder import LRFinder
 
+
 class ImageClassificationTF:
-    def __init__(self, path,image_size):
+    def __init__(self, path, image_size):
         self.path = path
         self.image_size = image_size
-
 
     def visualization(self):
         train_ds = tf.keras.preprocessing.image_dataset_from_directory(
@@ -51,7 +51,7 @@ class ImageClassificationTF:
         self.train_generator = train_datagen.flow_from_directory(
             self.path + '/train',
             target_size=(315, 315),
-            batch_size=32,
+            batch_size=64,
             class_mode='binary',
             subset='training')
 
@@ -80,7 +80,7 @@ class ImageClassificationTF:
         plt.savefig('results/keras/augmentation_examples.png')
         plt.show()
 
-    def customized_model(self,image_size,num_classes):
+    def customized_model(self, image_size, num_classes):
         data_augmentation = keras.Sequential(
             [
                 layers.RandomFlip("horizontal_and_vertical"),  # Random horizontal and verical picture change
@@ -132,23 +132,30 @@ class ImageClassificationTF:
 
         return customized_model
 
-
     def training_process(self, model, epochs, train_ds, val_ds, test_set):
         model.summary()  # model layers+info
-        lr_finder = LRFinder(model)
-        x_train = []
-        y_train = []
 
-        for image in train_ds:
-            x_train.append(image[0].shape)
-            y_train.append(image[1].shape)
+        # Compile model
+        model.compile(
+            optimizer=keras.optimizers.Adam(),  # most popular optimizer at the moment
+            loss="binary_crossentropy",  # loss for classification problem
+            metrics=["accuracy"],  # required metric
+        )
+
+        # Fit model with data
+        # history = model.fit_generator(train_ds, epochs=epochs,
+        #                   # callbacks=callbacks,
+        #                 validation_data=val_ds,
+        #                  )
+
+        lr_finder = LRFinder(model)
 
         # Train a model with batch size 300 for 5 epochs
         # with learning rate growing exponentially from 0.0001 to 1
-        lr_finder.find(x_train,y_train, start_lr=0.0001, end_lr=1, batch_size=300, epochs=5)
-
+        lr_finder.find_generator(train_ds, start_lr=0.000001, end_lr=1, epochs=50)
         # Plot the loss, ignore 20 batches in the beginning and 5 in the end
         lr_finder.plot_loss(n_skip_beginning=20, n_skip_end=5)
+        plt.show()
 
         # Plot rate of change of the loss
         # Ignore 20 batches in the beginning and 5 in the end
@@ -156,20 +163,26 @@ class ImageClassificationTF:
         # Limit the range for y axis to (-0.02, 0.01)
         lr_finder.plot_loss_change(sma=20, n_skip_beginning=20, n_skip_end=5, y_lim=(-0.01, 0.01))
 
-        learning_rate = input('Please type a suitable learning rate per LRfinder ')
-
+        # Now we are changing learning rate per visualization and recompile the model - fastest decrease on the graph
+        learning_rate = float(input('Please type in learning rate per visualization '))
         # Compile model
         model.compile(
             optimizer=keras.optimizers.Adam(learning_rate),  # most popular optimizer at the moment
             loss="binary_crossentropy",  # loss for classification problem
             metrics=["accuracy"],  # required metric
         )
+        model.summary()
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            mode='max',
+            patience=10,
+            verbose = -1
+        )
+
 
         # Fit model with data
-        history = model.fit(train_ds, epochs=epochs,
-                            # callbacks=callbacks,
-                            validation_data=val_ds,
-                            )
+        history = model.fit_generator(train_ds, epochs=epochs,
+                                       callbacks=[early_stopping],
+                                      validation_data=val_ds)
         # Model results visualization
 
         # summarize history for accuracy
@@ -193,7 +206,7 @@ class ImageClassificationTF:
         score = model.evaluate(test_set, verbose=0)
         print(f'Test loss: {score[0]} / Test accuracy: {score[1]}')
 
-    def pretrained_model(self,model,unfreeze):
+    def pretrained_model(self, model, unfreeze):
         if model == 'VGG16':
             model = VGG16(include_top=False, input_shape=self.image_size + (3,), weights='imagenet')
 
@@ -202,41 +215,22 @@ class ImageClassificationTF:
 
         customized_model = Sequential()
 
-        # Adding first layer of default model
-        customized_model.add(model.layers[0])
-
-        # Add remaining layers of default model
-        for layer in model.layers[:-1]:
+        # Add layers of base model
+        for layer in model.layers[:]:
             if unfreeze == 1:
                 layer.trainable = True
                 customized_model.add(layer)
-            elif unfreeze ==0:
-                layer.trainable = True
+            elif unfreeze == 0:
+                layer.trainable = False
                 customized_model.add(layer)
 
             else:
                 raise ValueError('Please choose either 0 - frozen layers or 1 - trainable layers')
 
-
-        customized_model.add(layers.GlobalAveragePooling2D())
-        # Add global average polling to be in line with dimensionality
-        # customized_model.add(layers.GlobalAveragePooling2D())
-
-        # Set pretrained layers of the model to be not trainable
-        #if unfreeze == 'yes':
-         #   customized_model.add(layers.GlobalAveragePooling2D())
-          #  for layer in customized_model.layers[:]:
-           #     layer.trainable = True
-
-
-
-        #else:
-         #   # Add global average polling to be in line with dimensionality
-          #  for layer in customized_model.layers[:]:
-           #     layer.trainable = False
+        customized_model.add(layers.Flatten())
+        customized_model.add(tf.keras.layers.Dropout(0.5))
 
         # Add last layer with sigmoid activation function since we have 2 classes
         customized_model.add(Dense(units=1, activation='sigmoid'))
 
         return customized_model
-
