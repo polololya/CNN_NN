@@ -33,7 +33,7 @@ class ImageClassificationTF:
                 plt.axis("off")
                 plt.suptitle('Dataset visualization with labels')
 
-            plt.savefig('results/dataset_visualization.jpg')
+            plt.savefig('results/keras/dataset_visualization.jpg')
 
     def test_train_val(self):
         train_datagen = ImageDataGenerator(
@@ -77,7 +77,7 @@ class ImageClassificationTF:
             ax.axis('off')
             plt.suptitle('Examples of data augmentation')
         plt.tight_layout()
-        plt.savefig('results/augmentation_examples.png')
+        plt.savefig('results/keras/augmentation_examples.png')
         plt.show()
 
     def customized_model(self,image_size,num_classes):
@@ -180,7 +180,7 @@ class ImageClassificationTF:
         plt.xlabel('epoch')
         plt.legend(['train', 'validation'], loc='upper left')
         plt.show()
-        plt.savefig('results/accuracy.png')
+        plt.savefig('results/keras/accuracy.png')
         # summarize history for loss
         plt.plot(history.history['loss'])
         plt.plot(history.history['val_loss'])
@@ -189,7 +189,7 @@ class ImageClassificationTF:
         plt.xlabel('epoch')
         plt.legend(['train', 'validation'], loc='upper left')
         plt.show()
-        plt.savefig('results/loss.png')
+        plt.savefig('results/keras/loss.png')
         score = model.evaluate(test_set, verbose=0)
         print(f'Test loss: {score[0]} / Test accuracy: {score[1]}')
 
