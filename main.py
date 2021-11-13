@@ -143,9 +143,9 @@ class ImageClassificationTF:
             x_train.append(image[0].shape)
             y_train.append(image[1].shape)
 
-        # Train a model with batch size 512 for 5 epochs
+        # Train a model with batch size 300 for 5 epochs
         # with learning rate growing exponentially from 0.0001 to 1
-        lr_finder.find(x_train,y_train, start_lr=0.0001, end_lr=1, batch_size=512, epochs=5)
+        lr_finder.find(x_train,y_train, start_lr=0.0001, end_lr=1, batch_size=300, epochs=5)
 
         # Plot the loss, ignore 20 batches in the beginning and 5 in the end
         lr_finder.plot_loss(n_skip_beginning=20, n_skip_end=5)
