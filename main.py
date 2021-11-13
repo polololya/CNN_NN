@@ -7,8 +7,7 @@ from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.applications import VGG19
 from tensorflow.keras.layers import Dense
 from tensorflow.keras import Sequential
-from keras.utils.vis_utils import plot_model
-from keras_lr_finder import lr_finder
+from keras_lr_finder import LRFinder
 
 class ImageClassificationTF:
     def __init__(self, path,image_size):
@@ -136,10 +135,32 @@ class ImageClassificationTF:
 
     def training_process(self, model, epochs, train_ds, val_ds, test_set):
         model.summary()  # model layers+info
+        lr_finder = LRFinder(model)
+        x_train = []
+        y_train = []
+
+        for image in train_ds:
+            x_train.append(image[0].shape)
+            y_train.append(image[1].shape)
+
+        # Train a model with batch size 512 for 5 epochs
+        # with learning rate growing exponentially from 0.0001 to 1
+        lr_finder.find(x_train,y_train, start_lr=0.0001, end_lr=1, batch_size=512, epochs=5)
+
+        # Plot the loss, ignore 20 batches in the beginning and 5 in the end
+        lr_finder.plot_loss(n_skip_beginning=20, n_skip_end=5)
+
+        # Plot rate of change of the loss
+        # Ignore 20 batches in the beginning and 5 in the end
+        # Smooth the curve using simple moving average of 20 batches
+        # Limit the range for y axis to (-0.02, 0.01)
+        lr_finder.plot_loss_change(sma=20, n_skip_beginning=20, n_skip_end=5, y_lim=(-0.01, 0.01))
+
+        learning_rate = input('Please type a suitable learning rate per LRfinder ')
 
         # Compile model
         model.compile(
-            optimizer=keras.optimizers.Adam(1e-3),  # most popular optimizer at the moment
+            optimizer=keras.optimizers.Adam(learning_rate),  # most popular optimizer at the moment
             loss="binary_crossentropy",  # loss for classification problem
             metrics=["accuracy"],  # required metric
         )
@@ -186,16 +207,15 @@ class ImageClassificationTF:
 
         # Add remaining layers of default model
         for layer in model.layers[:-1]:
-            customized_model.add(layer)
-
-
-        if unfreeze == 1:
-            for layer in customized_model.layers[:]:
+            if unfreeze == 1:
                 layer.trainable = True
+                customized_model.add(layer)
+            elif unfreeze ==0:
+                layer.trainable = True
+                customized_model.add(layer)
 
-        elif unfreeze ==0:
-            for layer in customized_model.layers[:]:
-                layer.trainable = False
+            else:
+                raise ValueError('Please choose either 0 - frozen layers or 1 - trainable layers')
 
 
         customized_model.add(layers.GlobalAveragePooling2D())
