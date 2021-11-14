@@ -1,4 +1,4 @@
-#Tensorflow/Keras related imports
+# Tensorflow/Keras related imports
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras import Sequential
 from keras_lr_finder import LRFinder
 from torch.utils.data.sampler import SubsetRandomSampler
-#Torch related imports
+# Torch related imports
 import torchvision
 import numpy as np
 import torch
@@ -29,6 +29,8 @@ All visualizations were stored to the corresponding folder(*project_folder/resul
 *location of all of the files for the project
 **library which you are using - keras/torch
 '''
+
+
 class ImageClassificationTF:
     def __init__(self, path, image_size):
         self.path = path
@@ -99,7 +101,7 @@ class ImageClassificationTF:
         plt.savefig('results/keras/augmentation_examples.png')
         plt.show()
 
-    def customized_model(self,):
+    def customized_model(self, image_size, num_classes):
         data_augmentation = keras.Sequential(
             [
                 layers.RandomFlip("horizontal_and_vertical"),  # Random horizontal and verical picture change
@@ -108,8 +110,7 @@ class ImageClassificationTF:
                 layers.RandomHeight(0.3),  # Random change height of the picture
             ]
         )
-
-        inputs = keras.Input(shape=self.image_size + (3,))
+        inputs = keras.Input(shape=image_size + (3,))
         # Image augmentation block
         x = data_augmentation(inputs)
         # Entry block
@@ -121,16 +122,16 @@ class ImageClassificationTF:
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
         previous_block_activation = x  # Set aside residual
-        for self.size in [128, 256, 512, 728]:
+        for size in [128, 256, 512, 728]:
             x = layers.Activation("relu")(x)
-            x = layers.SeparableConv2D(self.size, 3, padding="same")(x)
+            x = layers.SeparableConv2D(size, 3, padding="same")(x)
             x = layers.BatchNormalization()(x)
             x = layers.Activation("relu")(x)
-            x = layers.SeparableConv2D(self.size, 3, padding="same")(x)
+            x = layers.SeparableConv2D(size, 3, padding="same")(x)
             x = layers.BatchNormalization()(x)
             x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
             # Project residual
-            residual = layers.Conv2D(self.size, 1, strides=2, padding="same")(
+            residual = layers.Conv2D(size, 1, strides=2, padding="same")(
                 previous_block_activation
             )
             x = layers.add([x, residual])  # Add back residual
@@ -139,8 +140,14 @@ class ImageClassificationTF:
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
         x = layers.GlobalAveragePooling2D()(x)
+        if num_classes == 2:
+            activation = "sigmoid"
+            units = 1
+        else:
+            activation = "softmax"
+            units = num_classes
         x = layers.Dropout(0.2)(x)
-        outputs = layers.Dense(1, activation="sigmoid")(x)
+        outputs = layers.Dense(units, activation=activation)(x)
         customized_model = keras.Model(inputs, outputs)
 
         return customized_model
@@ -156,14 +163,14 @@ class ImageClassificationTF:
         )
 
         # Fit model with data
-        # history = model.fit_generator(train_ds, epochs=epochs,
-        #                   # callbacks=callbacks,
-        #                 validation_data=val_ds,
-        #                  )
+        history = model.fit_generator(train_ds, epochs=epochs,
+         #callbacks=callbacks,
+                         validation_data=val_ds,
+                          )
 
         lr_finder = LRFinder(model)
 
-        # Train a model with batch size 300 for 5 epochs
+        # Train a model with batches
         # with learning rate growing exponentially from 0.0001 to 1
         lr_finder.find_generator(train_ds, start_lr=0.000001, end_lr=1, epochs=50)
         # Plot the loss, ignore 20 batches in the beginning and 5 in the end
@@ -300,19 +307,19 @@ class ImageClassificationPT:
         return trainloader, valloader, testloader
 
     def visualize_classification(self, trainloader):
-        i=1
+        i = 1
         for batch_idx, (inputs, labels) in enumerate(trainloader):
             grid = torchvision.utils.make_grid(inputs, nrow=5)
             plt.imshow(transforms.ToPILImage()(grid))
             plt.savefig('results/pytorch/augmented_images_part' + str(i))
             plt.show()
-            i+= 1
+            i += 1
 
     def pretrained_model(self, model, unfreeze, trainloader, valloader, testloader, train_epochs):
         device = torch.device("cpu")
 
         # Architecture part
-        if model == 'resnet50':
+        if model == 'resnet':
             basemodel = models.resnet50(pretrained=True)
 
         elif model == 'densenet':
@@ -336,6 +343,7 @@ class ImageClassificationPT:
                                          nn.Dropout(0.2),
                                          nn.Linear(512, 2),
                                          nn.LogSoftmax(dim=1))
+            optimizer = optim.Adam(basemodel.fc.parameters(), lr=0.003)
         # Densenet
         else:
             basemodel.classifier = nn.Sequential(nn.Linear(2208, 512),
@@ -344,7 +352,7 @@ class ImageClassificationPT:
                                                  nn.Linear(512, 2),
                                                  nn.LogSoftmax(dim=1))
 
-        optimizer = optim.Adam(basemodel.classifier.parameters(), lr=0.003)
+            optimizer = optim.Adam(basemodel.classifier.parameters(), lr=0.003)
         criterion = nn.NLLLoss()
         print(basemodel.to(device))
         # LR finder
@@ -358,7 +366,7 @@ class ImageClassificationPT:
         optimizer = optim.Adam(basemodel.classifier.parameters(), lr=learning_rate)
         criterion = nn.NLLLoss()
 
-        #Validation pass function
+        # Validation pass function
 
         # Function for the validation pass
         def validation(model, validateloader, criterion):
@@ -376,7 +384,6 @@ class ImageClassificationPT:
                 equality = (labels.data == probabilities.max(dim=1)[1])
                 val_accuracy += equality.type(torch.FloatTensor).mean()
             return val_loss, val_accuracy
-
 
         # Train part
         epochs = train_epochs
