@@ -15,10 +15,19 @@ import numpy as np
 import torch
 from torch import nn
 from torch import optim
-import torch.nn.functional as F
-from torchvision import datasets, transforms, models
+from torchvision import transforms, models
+from torch_lr_finder import LRFinder as TLRFinder
+from torchvision.utils import make_grid
 
-
+'''
+Here is the implementation of VGG16, VGG19 - with Keras and
+Resnet50 and Densenet161 with Pytorch. Layers of base model were set to non trainable and then set as trainable to compare the performance of the model.
+There are some visualization methods there as well. Samples visualization was performed only with keras, to omit repetitions, yet augmentation visualization was performed using both keras and torch libraries.
+Optimal learning rate for all models was implemented to determine visually and to be set on user choice.(Leslie N. Smith method - https://arxiv.org/abs/1506.01186)
+All visualizations were stored to the corresponding folder(*project_folder/results/**library)
+*location of all of the files for the project
+**library which you are using - keras/torch
+'''
 class ImageClassificationTF:
     def __init__(self, path, image_size):
         self.path = path
@@ -89,7 +98,7 @@ class ImageClassificationTF:
         plt.savefig('results/keras/augmentation_examples.png')
         plt.show()
 
-    def customized_model(self, image_size, num_classes):
+    def customized_model(self,):
         data_augmentation = keras.Sequential(
             [
                 layers.RandomFlip("horizontal_and_vertical"),  # Random horizontal and verical picture change
@@ -99,7 +108,7 @@ class ImageClassificationTF:
             ]
         )
 
-        inputs = keras.Input(shape=image_size + (3,))
+        inputs = keras.Input(shape=self.image_size + (3,))
         # Image augmentation block
         x = data_augmentation(inputs)
         # Entry block
@@ -129,14 +138,8 @@ class ImageClassificationTF:
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
         x = layers.GlobalAveragePooling2D()(x)
-        if num_classes == 2:
-            activation = "sigmoid"
-            units = 1
-        else:
-            activation = "softmax"
-            units = num_classes
         x = layers.Dropout(0.2)(x)
-        outputs = layers.Dense(units, activation=activation)(x)
+        outputs = layers.Dense(1, activation="sigmoid")(x)
         customized_model = keras.Model(inputs, outputs)
 
         return customized_model
@@ -256,60 +259,126 @@ class ImageClassificationPT:
         train_transforms = transforms.Compose([transforms.Resize(self.size),
                                                transforms.ToTensor(),
                                                # Augmentation block
-                                               transforms.RandomCrop((120, 120)),
                                                transforms.RandomVerticalFlip(0.4),
                                                transforms.RandomHorizontalFlip(0.4),
                                                transforms.ColorJitter(brightness=0.1, contrast=0.2, saturation=0,
                                                                       hue=0),
                                                ])
-        test_transforms = transforms.Compose([transforms.Resize(self.size),
+        val_transforms = transforms.Compose([transforms.Resize(self.size),
+                                             transforms.ToTensor(),
+                                             # Augmentation block
+                                             transforms.RandomVerticalFlip(0.4),
+                                             transforms.RandomHorizontalFlip(0.4),
+                                             transforms.ColorJitter(brightness=0.1, contrast=0.2, saturation=0,
+                                                                    hue=0),
+                                             ])
+        test_transforms = transforms.Compose([transforms.Resize((self.size)),
                                               transforms.ToTensor(),
                                               ])
+
         train_data = torchvision.datasets.ImageFolder(self.path + '/train',
                                                       transform=train_transforms)
+        val_data = torchvision.datasets.ImageFolder(self.path + '/train',
+                                                    transform=val_transforms)
         test_data = torchvision.datasets.ImageFolder(self.path + '/test',
                                                      transform=test_transforms)
+
         num_train = len(train_data)
         indices = list(range(num_train))
         split = int(np.floor(valid_size * num_train))
         np.random.shuffle(indices)
-        train_idx, test_idx = indices[split:], indices[:split]
+        train_idx, val_idx = indices[split:], indices[:split]
         train_sampler = SubsetRandomSampler(train_idx)
-        test_sampler = SubsetRandomSampler(test_idx)
+        val_sampler = SubsetRandomSampler(val_idx)
         trainloader = torch.utils.data.DataLoader(train_data,
                                                   sampler=train_sampler, batch_size=64)
-        testloader = torch.utils.data.DataLoader(test_data,
-                                                 sampler=test_sampler, batch_size=64)
-        return trainloader, testloader
+        valloader = torch.utils.data.DataLoader(val_data,
+                                                sampler=val_sampler, batch_size=64)
+        testloader = torch.utils.data.DataLoader(test_data, batch_size=64)
 
-    def pretrained_model(self, model, unfreeze, trainloader, testloader):
+        return trainloader, valloader, testloader
+
+    def visualize_classification(self, trainloader):
+        i=1
+        for batch_idx, (inputs, labels) in enumerate(trainloader):
+            grid = torchvision.utils.make_grid(inputs, nrow=5)
+            plt.imshow(transforms.ToPILImage()(grid))
+            plt.savefig('results/pytorch/augmented_images_part' + str(i))
+            plt.show()
+            i+= 1
+
+    def pretrained_model(self, model, unfreeze, trainloader, valloader, testloader, train_epochs):
         device = torch.device("cpu")
+
+        # Architecture part
         if model == 'resnet50':
-            model = models.resnet50(pretrained=True)
+            basemodel = models.resnet50(pretrained=True)
 
         elif model == 'densenet':
-            model = models.densenet161(pretrained=True)
+            basemodel = models.densenet161(pretrained=True)
 
         else:
             raise ValueError('Model not implemented yet')
 
         if unfreeze == 1:
-            for param in model.parameters():
+            for param in basemodel.parameters():
                 param.requires_grad = True
 
         elif unfreeze == 0:
-            for param in model.parameters():
+            for param in basemodel.parameters():
                 param.requires_grad = False
 
-        model.fc = nn.Sequential(nn.Linear(2048, 512),
-                                 nn.ReLU(),
-                                 nn.Dropout(0.2),
-                                 nn.Linear(512, 10),
-                                 nn.LogSoftmax(dim=1))
+        # Resnet
+        if model == 'resnet':
+            basemodel.fc = nn.Sequential(nn.Linear(2048, 512),
+                                         nn.ReLU(),
+                                         nn.Dropout(0.2),
+                                         nn.Linear(512, 2),
+                                         nn.LogSoftmax(dim=1))
+        # Densenet
+        else:
+            basemodel.classifier = nn.Sequential(nn.Linear(2208, 512),
+                                                 nn.ReLU(),
+                                                 nn.Dropout(0.1),
+                                                 nn.Linear(512, 2),
+                                                 nn.LogSoftmax(dim=1))
+
+        optimizer = optim.Adam(basemodel.classifier.parameters(), lr=0.003)
         criterion = nn.NLLLoss()
-        optimizer = optim.Adam(model.fc.parameters(), lr=0.003)
-        model.to(device)
-        epochs = 10
+        print(basemodel.to(device))
+        # LR finder
+        lr_finder = TLRFinder(basemodel, optimizer, criterion)
+        lr_finder.range_test(trainloader, val_loader=valloader, end_lr=1, num_iter=100, step_mode="linear")
+        lr_finder.plot(log_lr=False)
+        plt.show()
+        plt.savefig('results/pytorch/suggested_lr.png')
+        lr_finder.reset()
+        learning_rate = float(input('Please put the best learning rate you see on the graph '))
+        optimizer = optim.Adam(basemodel.classifier.parameters(), lr=learning_rate)
+        criterion = nn.NLLLoss()
+
+        #Validation pass function
+
+        # Function for the validation pass
+        def validation(model, validateloader, criterion):
+            val_loss = 0
+            val_accuracy = 0
+
+            for images, labels in iter(valloader):
+                images, labels = images.to('cpu'), labels.to('cpu')
+
+                output = model.forward(images)
+                val_loss += criterion(output, labels).item()
+
+                probabilities = torch.exp(output)
+
+                equality = (labels.data == probabilities.max(dim=1)[1])
+                val_accuracy += equality.type(torch.FloatTensor).mean()
+            return val_loss, val_accuracy
+
+
+        # Train part
+        epochs = train_epochs
         steps = 0
         running_loss = 0
         print_every = 10
@@ -319,7 +388,7 @@ class ImageClassificationPT:
                 steps += 1
                 inputs, labels = inputs.to(device), labels.to(device)
                 optimizer.zero_grad()
-                logps = model.forward(inputs)
+                logps = basemodel.forward(inputs)
                 loss = criterion(logps, labels)
                 loss.backward()
                 optimizer.step()
@@ -328,11 +397,11 @@ class ImageClassificationPT:
                 if steps % print_every == 0:
                     test_loss = 0
                     accuracy = 0
-                    model.eval()
+                    basemodel.eval()
                     with torch.no_grad():
                         for inputs, labels in testloader:
                             inputs, labels = inputs.to(device), labels.to(device)
-                            logps = model.forward(inputs)
+                            logps = basemodel.forward(inputs)
                             batch_loss = criterion(logps, labels)
                             test_loss += batch_loss.item()
 
@@ -340,14 +409,18 @@ class ImageClassificationPT:
                             top_p, top_class = ps.topk(1, dim=1)
                             equals = top_class == labels.view(*top_class.shape)
                             accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
+                            basemodel.eval()
+                            val_loss, val_accuracy = validation(basemodel, valloader, criterion)
                     train_losses.append(running_loss / len(trainloader))
                     test_losses.append(test_loss / len(testloader))
                     print(f"Epoch {epoch + 1}/{epochs}.. "
                           f"Train loss: {running_loss / print_every:.3f}.. "
+                          f"Val loss: {val_loss / len(valloader):.3f}.. "
+                          f"Val accuracy: {val_accuracy / len(valloader):.3f}.. "
                           f"Test loss: {test_loss / len(testloader):.3f}.. "
                           f"Test accuracy: {accuracy / len(testloader):.3f}")
                     running_loss = 0
-                    model.train()
+                    basemodel.train()
         # torch.save(model, 'aerialmodel.pth')#Can uncomment and save the model
         plt.plot(train_losses, label='Training loss')
         plt.plot(test_losses, label='Validation loss')
