@@ -54,7 +54,10 @@ class ImageClassificationTF:
                 plt.axis("off")
                 plt.suptitle('Dataset visualization with labels')
 
-            plt.savefig('results/keras/dataset_visualization.jpg')
+        plt.savefig('results/keras/dataset_visualization.jpg')
+
+        train_ds = train_ds.prefetch(buffer_size=32)
+        return train_ds
 
     def test_train_val(self):
         train_datagen = ImageDataGenerator(
@@ -62,7 +65,6 @@ class ImageClassificationTF:
             shear_range=0.2,
             zoom_range=0.2,
             horizontal_flip=True,
-            vertical_flip=True,
             height_shift_range=0.1,
             validation_split=0.2,
             rotation_range=30,
@@ -72,7 +74,7 @@ class ImageClassificationTF:
         self.train_generator = train_datagen.flow_from_directory(
             self.path + '/train',
             target_size=(315, 315),
-            batch_size=64,
+            batch_size=32,
             class_mode='binary',
             subset='training')
 
@@ -84,7 +86,7 @@ class ImageClassificationTF:
             subset='validation')
 
         test_datagen = ImageDataGenerator(rescale=1. / 255)
-        self.test_pictures = test_datagen.flow_from_directory(self.path + '/test/', target_size=(315, 315),
+        self.test_pictures = test_datagen.flow_from_directory(self.path + '/test/', target_size=self.image_size,
                                                               batch_size=32,
                                                               class_mode='binary')
         return self.train_generator, self.validation_generator, self.test_pictures
@@ -114,7 +116,7 @@ class ImageClassificationTF:
         # Image augmentation block
         x = data_augmentation(inputs)
         # Entry block
-        x = layers.Rescaling(1.0 / 255)(inputs)
+        x = layers.Rescaling(1.0 / 255)(x)
         x = layers.Conv2D(32, 3, strides=2, padding="same")(x)
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
@@ -122,16 +124,16 @@ class ImageClassificationTF:
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
         previous_block_activation = x  # Set aside residual
-        for size in [128, 256, 512, 728]:
+        for self.size in [128, 256, 512, 728]:
             x = layers.Activation("relu")(x)
-            x = layers.SeparableConv2D(size, 3, padding="same")(x)
+            x = layers.SeparableConv2D(self.size, 3, padding="same")(x)
             x = layers.BatchNormalization()(x)
             x = layers.Activation("relu")(x)
-            x = layers.SeparableConv2D(size, 3, padding="same")(x)
+            x = layers.SeparableConv2D(self.size, 3, padding="same")(x)
             x = layers.BatchNormalization()(x)
             x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
             # Project residual
-            residual = layers.Conv2D(size, 1, strides=2, padding="same")(
+            residual = layers.Conv2D(self.size, 1, strides=2, padding="same")(
                 previous_block_activation
             )
             x = layers.add([x, residual])  # Add back residual
@@ -162,12 +164,6 @@ class ImageClassificationTF:
             metrics=["accuracy"],  # required metric
         )
 
-        # Fit model with data
-        history = model.fit_generator(train_ds, epochs=epochs,
-         #callbacks=callbacks,
-                         validation_data=val_ds,
-                          )
-
         lr_finder = LRFinder(model)
 
         # Train a model with batches
@@ -195,15 +191,9 @@ class ImageClassificationTF:
             metrics=["accuracy"],  # required metric
         )
         model.summary()
-        early_stopping = tf.keras.callbacks.EarlyStopping(
-            mode='max',
-            patience=10,
-            verbose=-1
-        )
 
         # Fit model with data
         history = model.fit_generator(train_ds, epochs=epochs,
-                                      callbacks=[early_stopping],
                                       validation_data=val_ds)
         # Model results visualization
 
@@ -214,8 +204,9 @@ class ImageClassificationTF:
         plt.ylabel('accuracy')
         plt.xlabel('epoch')
         plt.legend(['train', 'validation'], loc='upper left')
-        plt.show()
         plt.savefig('results/keras/accuracy.png')
+        plt.show()
+
         # summarize history for loss
         plt.plot(history.history['loss'])
         plt.plot(history.history['val_loss'])
@@ -223,8 +214,8 @@ class ImageClassificationTF:
         plt.ylabel('loss')
         plt.xlabel('epoch')
         plt.legend(['train', 'validation'], loc='upper left')
-        plt.show()
         plt.savefig('results/keras/loss.png')
+        plt.show()
         score = model.evaluate(test_set, verbose=0)
         print(f'Test loss: {score[0]} / Test accuracy: {score[1]}')
 
@@ -321,10 +312,10 @@ class ImageClassificationPT:
         # Architecture part
         if model == 'resnet':
             basemodel = models.resnet50(pretrained=True)
-
+            optimizer = optim.Adam(basemodel.fc.parameters(), lr=0.003)
         elif model == 'densenet':
             basemodel = models.densenet161(pretrained=True)
-
+            optimizer = optim.Adam(basemodel.classifier.parameters(), lr=0.003)
         else:
             raise ValueError('Model not implemented yet')
 
@@ -343,7 +334,7 @@ class ImageClassificationPT:
                                          nn.Dropout(0.2),
                                          nn.Linear(512, 2),
                                          nn.LogSoftmax(dim=1))
-            optimizer = optim.Adam(basemodel.fc.parameters(), lr=0.003)
+            # optimizer = optim.Adam(basemodel.fc.parameters(), lr=0.003)
         # Densenet
         else:
             basemodel.classifier = nn.Sequential(nn.Linear(2208, 512),
@@ -352,18 +343,22 @@ class ImageClassificationPT:
                                                  nn.Linear(512, 2),
                                                  nn.LogSoftmax(dim=1))
 
-            optimizer = optim.Adam(basemodel.classifier.parameters(), lr=0.003)
+            # optimizer = optim.Adam(basemodel.classifier.parameters(), lr=0.003)
         criterion = nn.NLLLoss()
         print(basemodel.to(device))
         # LR finder
         lr_finder = TLRFinder(basemodel, optimizer, criterion)
         lr_finder.range_test(trainloader, val_loader=valloader, end_lr=1, num_iter=100, step_mode="linear")
         lr_finder.plot(log_lr=False)
-        plt.show()
-        plt.savefig('results/pytorch/suggested_lr.png')
         lr_finder.reset()
         learning_rate = float(input('Please put the best learning rate you see on the graph '))
-        optimizer = optim.Adam(basemodel.classifier.parameters(), lr=learning_rate)
+        # Resnet
+        if model == 'resnet':
+            optimizer = optim.Adam(basemodel.fc.parameters(), lr=learning_rate)
+        # Densenet
+        else:
+            optimizer = optim.Adam(basemodel.classifier.parameters(), lr=learning_rate)
+
         criterion = nn.NLLLoss()
 
         # Validation pass function
